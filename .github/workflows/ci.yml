@@ -55,3 +55,7 @@ jobs:
               npm install
             fi
             VITE_BASE_URL=${{ vars.VITE_BASE_URL }} VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }} npm run build
+
+            sudo mkdir -p /var/www/frontend
+            sudo cp -r dist/* /var/www/frontend/
+            sudo chown -R www-data:www-data /var/www/frontend
