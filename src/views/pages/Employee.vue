@@ -883,7 +883,7 @@ onMounted(async () => {
             apiServices.getMailCatagories(providerMail.shopgmail)
         ])
         if (dongvanRes?.status === 'success') {
-            dongvanMail.value = dongvanRes?.categories?.data
+            dongvanMail.value = dongvanRes?.categories?.data || []
         } else {
             toast.warning("Không có dữ liệu từ Dongvan!", {
                 timeout: 3000,
@@ -892,7 +892,7 @@ onMounted(async () => {
         }
 
         if (sellmmoRes?.status === 'success') {
-            sellmmoMail.value = sellmmoRes?.categories?.data
+            sellmmoMail.value = sellmmoRes?.categories?.data || []
         } else {
             toast.warning("Không có dữ liệu từ SellMMO!", {
                 timeout: 3000,
@@ -901,7 +901,7 @@ onMounted(async () => {
         }
 
         if (muaviewRes?.status === 'success') {
-            muaviewMail.value = muaviewRes?.categories?.data
+            muaviewMail.value = muaviewRes?.categories?.data || []
         } else {
             toast.warning("Không có dữ liệu từ SellMMO!", {
                 timeout: 3000,
@@ -910,7 +910,7 @@ onMounted(async () => {
         }
 
         if (muaviewthatRes?.status === 'success') {
-            muaviewMailThat.value = muaviewthatRes?.categories?.data
+            muaviewMailThat.value = muaviewthatRes?.categories?.data || []
         } else {
             toast.warning("Không có dữ liệu từ SellMMO!", {
                 timeout: 3000,
@@ -919,7 +919,7 @@ onMounted(async () => {
         }
 
         if (shopgmailRes?.status === 'success') {
-            shopGmail.value = shopgmailRes?.categories?.data
+            shopGmail.value = shopgmailRes?.categories?.data || []
         } else {
             toast.warning("Không có dữ liệu từ SellMMO!", {
                 timeout: 3000,
