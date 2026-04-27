@@ -1,0 +1,52 @@
+name: CI/CD Frontend
+
+on:
+  push:
+    branches: [ "**" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install deps
+        run: npm install
+      - name: Build
+        run: npm run build
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            PROJECT_DIR="/root/green_sideline/frontend"
+            REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git"
+
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
+              echo "Folder chưa tồn tại. Đang tiến hành clone..."
+              git clone $REPO_URL $PROJECT_DIR
+            fi
+
+            cd $PROJECT_DIR
+            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git main
+
+            npm install
+            npm run build
