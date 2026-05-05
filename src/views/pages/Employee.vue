@@ -882,49 +882,42 @@ onMounted(async () => {
             apiServices.getMailCatagories(providerMail.muaview_that),
             apiServices.getMailCatagories(providerMail.shopgmail)
         ])
+        // Backend trả categories là array trực tiếp hoặc object có .data bên trong
+        const parseCategories = (res) => {
+            const cats = res?.categories
+            if (Array.isArray(cats)) return cats
+            if (Array.isArray(cats?.data)) return cats.data
+            return []
+        }
+
         if (dongvanRes?.status === 'success') {
-            dongvanMail.value = dongvanRes?.categories || []
+            dongvanMail.value = parseCategories(dongvanRes)
         } else {
-            toast.warning("Không có dữ liệu từ Dongvan!", {
-                timeout: 3000,
-                position: "top-center",
-            })
+            toast.warning("Không có dữ liệu từ Dongvan!", { timeout: 3000, position: "top-center" })
         }
 
         if (sellmmoRes?.status === 'success') {
-            sellmmoMail.value = sellmmoRes?.categories || []
+            sellmmoMail.value = parseCategories(sellmmoRes)
         } else {
-            toast.warning("Không có dữ liệu từ SellMMO!", {
-                timeout: 3000,
-                position: "top-center",
-            })
+            toast.warning("Không có dữ liệu từ SellMMO!", { timeout: 3000, position: "top-center" })
         }
 
         if (muaviewRes?.status === 'success') {
-            muaviewMail.value = muaviewRes?.categories?.data || muaviewRes?.categories || []
+            muaviewMail.value = parseCategories(muaviewRes)
         } else {
-            toast.warning("Không có dữ liệu từ SellMMO!", {
-                timeout: 3000,
-                position: "top-center",
-            })
+            toast.warning("Không có dữ liệu từ MuaView!", { timeout: 3000, position: "top-center" })
         }
 
         if (muaviewthatRes?.status === 'success') {
-            muaviewMailThat.value = muaviewthatRes?.categories?.data || muaviewthatRes?.categories || []
+            muaviewMailThat.value = parseCategories(muaviewthatRes)
         } else {
-            toast.warning("Không có dữ liệu từ SellMMO!", {
-                timeout: 3000,
-                position: "top-center",
-            })
+            toast.warning("Không có dữ liệu từ MuaView Thật!", { timeout: 3000, position: "top-center" })
         }
 
         if (shopgmailRes?.status === 'success') {
-            shopGmail.value = shopgmailRes?.categories || []
+            shopGmail.value = parseCategories(shopgmailRes)
         } else {
-            toast.warning("Không có dữ liệu từ SellMMO!", {
-                timeout: 3000,
-                position: "top-center",
-            })
+            toast.warning("Không có dữ liệu từ ShopGmail!", { timeout: 3000, position: "top-center" })
         }
 
         if (appleMailRes?.status === 'success') {
