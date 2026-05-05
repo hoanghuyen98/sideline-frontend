@@ -409,13 +409,23 @@
                     <!-- Form cập nhật proxy -->
                     <div class="space-y-4">
                         <h3 class="font-semibold text-gray-700">Cập nhật Proxy US</h3>
-                        <input v-model="proxyInput" type="text"
-                            placeholder="http://username:password@host:port"
-                            class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300 font-mono text-sm outline-none" />
+                        <div class="space-y-1">
+                            <input v-model="proxyInput" type="text" @input="proxyInputError = ''"
+                                placeholder="http://username:password@host:port"
+                                :class="proxyInputError
+                                    ? 'border-red-400 bg-red-50 focus:ring-red-300'
+                                    : 'border-gray-300 focus:ring-blue-300'"
+                                class="w-full p-3 border rounded-md focus:ring-2 font-mono text-sm outline-none" />
+                            <div v-if="proxyInputError" class="flex items-start gap-1.5 text-red-600 text-xs">
+                                <span class="mt-0.5 shrink-0">⚠️</span>
+                                <span>{{ proxyInputError }}</span>
+                            </div>
+                            <p class="text-xs text-gray-400">Format: <span class="font-mono">http://username:password@host:port</span></p>
+                        </div>
                         <ButtonProcess title="Lưu Proxy" :isLoading="isBtnSaveProxyLoading" @click="saveProxy" />
                     </div>
 
-                    <!-- Proxy hiện tại -->
+                    <!-- Proxy hiện tại + Test -->
                     <div class="space-y-4">
                         <h3 class="font-semibold text-gray-700">Proxy US hiện tại</h3>
 
@@ -435,14 +445,37 @@
                             Chưa có proxy nào được cấu hình
                         </div>
 
-                        <div v-else
-                            class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-4 py-3 gap-3">
-                            <span class="font-mono text-sm text-gray-800 break-all">{{ currentProxy }}</span>
-                            <button @click="copyText(currentProxy)"
-                                class="shrink-0 bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded cursor-pointer">
-                                Copy
-                            </button>
-                        </div>
+                        <template v-else>
+                            <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-4 py-3 gap-3">
+                                <span class="font-mono text-sm text-gray-800 break-all">{{ currentProxy }}</span>
+                                <button @click="copyText(currentProxy)"
+                                    class="shrink-0 bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded cursor-pointer">
+                                    Copy
+                                </button>
+                            </div>
+
+                            <!-- Nút Test -->
+                            <ButtonProcess title="Test Proxy" :isLoading="isTestingProxy" @click="testProxy"
+                                color_btn="gray" />
+
+                            <!-- Kết quả test -->
+                            <div v-if="proxyTestResult" :class="proxyTestResult.status === 'success'
+                                ? 'bg-green-50 border-green-300 text-green-800'
+                                : 'bg-red-50 border-red-300 text-red-800'"
+                                class="border rounded-lg px-4 py-3 text-sm space-y-1">
+                                <p class="font-semibold">
+                                    {{ proxyTestResult.status === 'success' ? '✅ Proxy hoạt động!' : '❌ Proxy lỗi!' }}
+                                </p>
+                                <template v-if="proxyTestResult.status === 'success'">
+                                    <p>🌐 IP: <span class="font-mono font-bold">{{ proxyTestResult.ip }}</span></p>
+                                    <p>🏳️ Country: <span class="font-semibold">{{ proxyTestResult.country }}</span></p>
+                                    <p>🏢 Org: <span class="text-gray-700">{{ proxyTestResult.org }}</span></p>
+                                </template>
+                                <template v-else>
+                                    <p>{{ proxyTestResult.message }}</p>
+                                </template>
+                            </div>
+                        </template>
 
                         <p v-if="proxyUpdatedAt" class="text-xs text-gray-400">
                             Cập nhật lúc: {{ formatLocal(proxyUpdatedAt) }}
@@ -1174,6 +1207,59 @@ const currentProxy = ref('')
 const proxyUpdatedAt = ref(null)
 const isProxyLoading = ref(false)
 const isBtnSaveProxyLoading = ref(false)
+const isTestingProxy = ref(false)
+const proxyTestResult = ref(null)
+const proxyInputError = ref('')
+
+const validateProxy = (value) => {
+    if (!value) return 'Vui lòng nhập proxy!'
+
+    if (!value.startsWith('http://') && !value.startsWith('https://')) {
+        return 'Thiếu prefix — phải bắt đầu bằng "http://" hoặc "https://"'
+    }
+
+    // Tách phần sau http(s)://
+    const withoutScheme = value.replace(/^https?:\/\//, '')
+
+    if (!withoutScheme.includes('@')) {
+        return 'Thiếu phần "username:password@" trước địa chỉ host'
+    }
+
+    const atIdx = withoutScheme.lastIndexOf('@')
+    const credentials = withoutScheme.slice(0, atIdx)
+    const hostPort = withoutScheme.slice(atIdx + 1)
+
+    if (!credentials.includes(':')) {
+        return 'Thiếu dấu ":" giữa username và password (VD: myuser:mypass)'
+    }
+
+    const [username, ...passParts] = credentials.split(':')
+    const password = passParts.join(':')
+
+    if (!username) return 'Username không được để trống'
+    if (!password) return 'Password không được để trống'
+
+    if (!hostPort.includes(':')) {
+        return 'Thiếu port — format host phải là "host:port" (VD: 104.25.34.12:8080)'
+    }
+
+    const lastColon = hostPort.lastIndexOf(':')
+    const host = hostPort.slice(0, lastColon)
+    const port = hostPort.slice(lastColon + 1)
+
+    if (!host) return 'Địa chỉ host không được để trống'
+
+    if (!/^\d+$/.test(port)) {
+        return `Port không hợp lệ: "${port}" — port phải là số nguyên (VD: 10000)`
+    }
+
+    const portNum = parseInt(port)
+    if (portNum < 1 || portNum > 65535) {
+        return `Port ${portNum} nằm ngoài phạm vi hợp lệ (1 - 65535)`
+    }
+
+    return ''
+}
 
 const fetchProxySetting = async () => {
     isProxyLoading.value = true
@@ -1192,10 +1278,12 @@ const fetchProxySetting = async () => {
 
 const saveProxy = async () => {
     const value = proxyInput.value.trim()
-    if (!value) {
-        toast.warning('Vui lòng nhập proxy!', { timeout: 3000, position: 'top-center' })
+    const error = validateProxy(value)
+    if (error) {
+        proxyInputError.value = error
         return
     }
+    proxyInputError.value = ''
 
     isBtnSaveProxyLoading.value = true
     try {
@@ -1205,6 +1293,7 @@ const saveProxy = async () => {
             proxyInput.value = ''
             currentProxy.value = response.proxy_us || value
             proxyUpdatedAt.value = response.updated_at || null
+            proxyTestResult.value = null
         } else {
             toast.error('Lưu proxy thất bại!', { timeout: 3000, position: 'top-center' })
         }
@@ -1212,6 +1301,19 @@ const saveProxy = async () => {
         toast.error('Lỗi khi lưu proxy!', { timeout: 3000, position: 'top-center' })
     } finally {
         isBtnSaveProxyLoading.value = false
+    }
+}
+
+const testProxy = async () => {
+    isTestingProxy.value = true
+    proxyTestResult.value = null
+    try {
+        const response = await apiServices.postTestProxy()
+        proxyTestResult.value = response
+    } catch (err) {
+        proxyTestResult.value = { status: 'error', message: 'Không thể kết nối tới server!' }
+    } finally {
+        isTestingProxy.value = false
     }
 }
 // -------------------------------------------------------

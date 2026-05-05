@@ -236,6 +236,10 @@ class ApiService extends ApiBaseService {
     return this.putRequest('/proxy_setting/', payload)
   }
 
+  postTestProxy = () => {
+    return this.postRequest('/proxy_setting/test/', {})
+  }
+
   postRevokeAccount = (customer_names, history_id) => {
     const payload = {
       customer_names: customer_names,
