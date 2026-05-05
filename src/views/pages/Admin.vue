@@ -385,6 +385,72 @@
                 <!-- Danh sách khách hàng -->
 
             </div>
+            <!-- Cài đặt Proxy -->
+            <div class="bg-white w-full rounded-lg shadow-xl p-8 space-y-6">
+                <div class="flex items-center justify-center gap-2 mb-2">
+                    <svg class="w-8 h-8 text-green-600 flex-none shrink-0" aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 18.5A2.493 2.493 0 0 1 7.51 20H7.5a2.468 2.468 0 0 1-2.4-3.154 2.98 2.98 0 0 1-.85-5.274 2.468 2.468 0 0 1 .92-3.182 2.477 2.477 0 0 1 1.876-3.344 2.5 2.5 0 0 1 3.41-1.856A2.5 2.5 0 0 1 12 5.5m0 13v-13m0 13a2.493 2.493 0 0 0 4.49 1.5h.01a2.468 2.468 0 0 0 2.4-3.154 2.98 2.98 0 0 0 .85-5.274 2.468 2.468 0 0 0-.92-3.182 2.477 2.477 0 0 0-1.876-3.344A2.5 2.5 0 0 0 14.5 3.5 2.5 2.5 0 0 0 12 5.5" />
+                    </svg>
+                    <h2 class="text-2xl font-bold text-center">CÀI ĐẶT PROXY</h2>
+                </div>
+
+                <!-- Format hướng dẫn -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 space-y-1">
+                    <p class="font-semibold">📋 Format chuẩn (mỗi proxy một dòng):</p>
+                    <code class="block bg-white border border-blue-100 rounded px-3 py-2 font-mono text-xs">http://username:password@host:port</code>
+                    <p class="text-xs text-blue-600 mt-1">
+                        Ví dụ: <span class="font-mono">http://myuser:mypass@104.25.34.12:12233</span>
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <!-- Form cập nhật proxy -->
+                    <div class="space-y-4">
+                        <h3 class="font-semibold text-gray-700">Cập nhật Proxy US</h3>
+                        <input v-model="proxyInput" type="text"
+                            placeholder="http://username:password@host:port"
+                            class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300 font-mono text-sm outline-none" />
+                        <ButtonProcess title="Lưu Proxy" :isLoading="isBtnSaveProxyLoading" @click="saveProxy" />
+                    </div>
+
+                    <!-- Proxy hiện tại -->
+                    <div class="space-y-4">
+                        <h3 class="font-semibold text-gray-700">Proxy US hiện tại</h3>
+
+                        <div v-if="isProxyLoading" class="flex justify-center py-8">
+                            <svg class="w-8 h-8 text-blue-600" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                                fill="currentColor">
+                                <path
+                                    d="M12,4a8,8,0,0,1,7.89,6.7A1.53,1.53,0,0,0,21.38,12h0a1.5,1.5,0,0,0,1.48-1.75,11,11,0,0,0-21.72,0A1.5,1.5,0,0,0,2.62,12h0a1.53,1.53,0,0,0,1.49-1.3A8,8,0,0,1,12,4Z">
+                                    <animateTransform attributeName="transform" type="rotate" dur="0.75s"
+                                        values="0 12 12;360 12 12" repeatCount="indefinite" />
+                                </path>
+                            </svg>
+                        </div>
+
+                        <div v-else-if="!currentProxy"
+                            class="text-center text-gray-400 py-8 border border-dashed border-gray-300 rounded-lg">
+                            Chưa có proxy nào được cấu hình
+                        </div>
+
+                        <div v-else
+                            class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-4 py-3 gap-3">
+                            <span class="font-mono text-sm text-gray-800 break-all">{{ currentProxy }}</span>
+                            <button @click="copyText(currentProxy)"
+                                class="shrink-0 bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded cursor-pointer">
+                                Copy
+                            </button>
+                        </div>
+
+                        <p v-if="proxyUpdatedAt" class="text-xs text-gray-400">
+                            Cập nhật lúc: {{ formatLocal(proxyUpdatedAt) }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <StaffModal :show="isModalOpen" :user="selectedUser" :groups="groupList" @close="isModalOpen = false"
                 @save-success="refreshEmployee" />
             <!-- <CustomerModal :show="isModalOpenCustomer" :user="selectedCustomer" @close="isModalOpenCustomer = false"
@@ -1102,10 +1168,59 @@ const handleRowClick = (event, item, type) => {
     }
 }
 
+// -------------------- Proxy Setting --------------------
+const proxyInput = ref('')
+const currentProxy = ref('')
+const proxyUpdatedAt = ref(null)
+const isProxyLoading = ref(false)
+const isBtnSaveProxyLoading = ref(false)
+
+const fetchProxySetting = async () => {
+    isProxyLoading.value = true
+    try {
+        const response = await apiServices.getProxySetting()
+        if (response?.status === 'success') {
+            currentProxy.value = response.proxy_us || ''
+            proxyUpdatedAt.value = response.updated_at || null
+        }
+    } catch (err) {
+        console.log(err)
+    } finally {
+        isProxyLoading.value = false
+    }
+}
+
+const saveProxy = async () => {
+    const value = proxyInput.value.trim()
+    if (!value) {
+        toast.warning('Vui lòng nhập proxy!', { timeout: 3000, position: 'top-center' })
+        return
+    }
+
+    isBtnSaveProxyLoading.value = true
+    try {
+        const response = await apiServices.putProxySetting(value)
+        if (response?.status === 'success') {
+            toast.success('Lưu proxy thành công!', { timeout: 3000, position: 'top-center' })
+            proxyInput.value = ''
+            currentProxy.value = response.proxy_us || value
+            proxyUpdatedAt.value = response.updated_at || null
+        } else {
+            toast.error('Lưu proxy thất bại!', { timeout: 3000, position: 'top-center' })
+        }
+    } catch (err) {
+        toast.error('Lỗi khi lưu proxy!', { timeout: 3000, position: 'top-center' })
+    } finally {
+        isBtnSaveProxyLoading.value = false
+    }
+}
+// -------------------------------------------------------
+
 onMounted(async () => {
     await fetchReportOverview()
     await fetchListEmployee()
     await fetchListGroup()
     await fetchCustomerHistory()
+    await fetchProxySetting()
 })
 </script>

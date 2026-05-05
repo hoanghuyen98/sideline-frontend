@@ -901,7 +901,7 @@ onMounted(async () => {
         }
 
         if (muaviewRes?.status === 'success') {
-            muaviewMail.value = muaviewRes?.categories || []
+            muaviewMail.value = muaviewRes?.categories?.data || muaviewRes?.categories || []
         } else {
             toast.warning("Không có dữ liệu từ SellMMO!", {
                 timeout: 3000,
@@ -910,7 +910,7 @@ onMounted(async () => {
         }
 
         if (muaviewthatRes?.status === 'success') {
-            muaviewMailThat.value = muaviewthatRes?.categories || []
+            muaviewMailThat.value = muaviewthatRes?.categories?.data || muaviewthatRes?.categories || []
         } else {
             toast.warning("Không có dữ liệu từ SellMMO!", {
                 timeout: 3000,

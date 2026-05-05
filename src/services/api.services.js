@@ -225,6 +225,17 @@ class ApiService extends ApiBaseService {
     return this.getRequest(`/task_status/${taskId}/`)
   }
 
+  getProxySetting = () => {
+    return this.getRequest('/proxy_setting/')
+  }
+
+  putProxySetting = (proxy_us) => {
+    const payload = {
+      proxy_us: proxy_us,
+    }
+    return this.putRequest('/proxy_setting/', payload)
+  }
+
   postRevokeAccount = (customer_names, history_id) => {
     const payload = {
       customer_names: customer_names,
