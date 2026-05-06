@@ -117,6 +117,7 @@ jobs:
     needs: deploy-production
     if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'production')
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Set status
         id: status
@@ -210,6 +211,7 @@ jobs:
     needs: deploy-server2
     if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'env_2.24.71.55')
     runs-on: ubuntu-latest
+    environment: env_2.24.71.55
     steps:
       - name: Set status
         id: status
