@@ -3,6 +3,17 @@ name: CI/CD Frontend
 on:
   push:
     branches: [ "**" ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - production
+          - env_2.24.71.55
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,11 +37,52 @@ jobs:
           VITE_DOMAIN_WEB: ${{ vars.VITE_DOMAIN_WEB }}
         run: npm run build
 
-  deploy:
+  deploy-production:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+       github.event.inputs.environment == 'all' ||
+       github.event.inputs.environment == 'production')
     runs-on: ubuntu-latest
     environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            PROJECT_DIR="/root/green_sideline/frontend"
+            REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git"
+
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
+              echo "Folder chưa tồn tại. Đang tiến hành clone..."
+              git clone $REPO_URL $PROJECT_DIR
+            fi
+
+            cd $PROJECT_DIR
+            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git main
+
+            if [ ! -d "$PROJECT_DIR/node_modules" ] || [ package.json -nt node_modules ]; then
+              npm install
+            fi
+            VITE_BASE_URL=${{ vars.VITE_BASE_URL }} VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }} npm run build
+
+            sudo mkdir -p /var/www/frontend
+            sudo cp -r dist/* /var/www/frontend/
+            sudo chown -R www-data:www-data /var/www/frontend
+
+  deploy-staging:
+    needs: build
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event.inputs.environment == 'all' ||
+       github.event.inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    environment: staging
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
