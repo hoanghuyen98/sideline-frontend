@@ -2,7 +2,7 @@ name: CI/CD Frontend
 
 on:
   push:
-    branches: ["main"]  # Chỉ auto-deploy khi push vào main
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       environment:
@@ -47,47 +47,46 @@ jobs:
           VITE_DOMAIN_WEB: ${{ vars.VITE_DOMAIN_WEB }}
         run: npm run build
 
-  deploy-production:
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  deploy-server1:
     needs: build
     if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && (
+      github.event_name == 'workflow_dispatch' && (
         github.event.inputs.environment == 'all' ||
         github.event.inputs.environment == 'production'
-      ))
+      )
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy via SSH
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/frontend"
+          strip_components: 1
+
+      - name: Set permissions
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.SSH_HOST }}
           username: ${{ vars.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            set -e
-            DEPLOY_BRANCH="${{ github.event.inputs.branch || 'main' }}"
-            PROJECT_DIR="/root/green_sideline/frontend"
-            REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git"
-
-            if [ ! -d "$PROJECT_DIR/.git" ]; then
-              echo "Folder chưa tồn tại. Đang tiến hành clone..."
-              git clone $REPO_URL $PROJECT_DIR
-            fi
-
-            cd $PROJECT_DIR
-            git fetch https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git
-            git checkout $DEPLOY_BRANCH
-            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git $DEPLOY_BRANCH
-
-            if [ ! -d "$PROJECT_DIR/node_modules" ] || [ package.json -nt node_modules ]; then
-              npm install
-            fi
-
-            VITE_BASE_URL=${{ vars.VITE_BASE_URL }} VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }} npm run build
-
-            sudo mkdir -p /var/www/frontend
-            sudo cp -r dist/* /var/www/frontend/
             sudo chown -R www-data:www-data /var/www/frontend
 
   deploy-server2:
@@ -100,34 +99,27 @@ jobs:
     runs-on: ubuntu-latest
     environment: env_2.24.71.55
     steps:
-      - name: Deploy via SSH
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/frontend"
+          strip_components: 1
+
+      - name: Set permissions
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.SSH_HOST }}
           username: ${{ vars.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            set -e
-            DEPLOY_BRANCH="${{ github.event.inputs.branch || 'main' }}"
-            PROJECT_DIR="/root/green_sideline/frontend"
-            REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git"
-
-            if [ ! -d "$PROJECT_DIR/.git" ]; then
-              echo "Folder chưa tồn tại. Đang tiến hành clone..."
-              git clone $REPO_URL $PROJECT_DIR
-            fi
-
-            cd $PROJECT_DIR
-            git fetch https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git
-            git checkout $DEPLOY_BRANCH
-            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git $DEPLOY_BRANCH
-
-            if [ ! -d "$PROJECT_DIR/node_modules" ] || [ package.json -nt node_modules ]; then
-              npm install
-            fi
-
-            VITE_BASE_URL=${{ vars.VITE_BASE_URL }} VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }} npm run build
-
-            sudo mkdir -p /var/www/frontend
-            sudo cp -r dist/* /var/www/frontend/
             sudo chown -R www-data:www-data /var/www/frontend
