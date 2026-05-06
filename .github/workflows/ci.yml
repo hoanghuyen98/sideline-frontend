@@ -24,20 +24,3 @@ jobs:
           VITE_BASE_URL: ${{ vars.VITE_BASE_URL }}
           VITE_DOMAIN_WEB: ${{ vars.VITE_DOMAIN_WEB }}
         run: npm run build
-
-      - name: Save build info
-        run: |
-          echo '{
-            "sha": "${{ github.sha }}",
-            "sha_short": "'$(echo ${{ github.sha }} | cut -c1-7)'",
-            "commit_msg": "${{ github.event.head_commit.message }}",
-            "author": "${{ github.event.head_commit.author.name }}",
-            "run_id": "${{ github.run_id }}"
-          }' > dist/build-info.json
-
-      - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          retention-days: 7
