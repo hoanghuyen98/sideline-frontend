@@ -118,6 +118,15 @@ jobs:
     if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'production')
     runs-on: ubuntu-latest
     steps:
+      - name: Set status
+        id: status
+        run: |
+          if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+            echo "text=✅ Thành công" >> $GITHUB_OUTPUT
+          else
+            echo "text=❌ Thất bại" >> $GITHUB_OUTPUT
+          fi
+
       - name: Send Telegram Notification
         uses: appleboy/telegram-action@master
         with:
@@ -128,5 +137,103 @@ jobs:
             *🚀 Thông báo Deploy - Sideline Frontend*
 
             🌍 *Môi trường:* `production`
-            📊 *Trạng thái:* `${{ needs.deploy-production.result == 'success' && '✅ Thành công' || '❌ Thất bại' }}`
-            📝 *Commit:* `${{ needs
+            📊 *Trạng thái:* `${{ steps.status.outputs.text }}`
+            📝 *Commit:* `${{ needs.deploy-production.outputs.commit_msg }}`
+            🆔 *SHA:* `${{ needs.deploy-production.outputs.sha_short }}`
+            👤 *Deploy by:* `${{ github.actor }}`
+            👤 *Commit by:* `${{ needs.deploy-production.outputs.author }}`
+
+            *Chi tiết:* [GitHub Action Log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+  deploy-server2:
+    needs: resolve-artifact
+    if: |
+      github.event.inputs.environment == 'all' ||
+      github.event.inputs.environment == 'env_2.24.71.55'
+    runs-on: ubuntu-latest
+    environment: env_2.24.71.55
+    outputs:
+      sha_short: ${{ steps.info.outputs.sha_short }}
+      commit_msg: ${{ steps.info.outputs.commit_msg }}
+      author: ${{ steps.info.outputs.author }}
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          run-id: ${{ needs.resolve-artifact.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read build info
+        id: info
+        run: |
+          cat dist/build-info.json
+          echo "sha_short=$(jq -r '.sha_short' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "commit_msg=$(jq -r '.commit_msg' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "author=$(jq -r '.author' dist/build-info.json)" >> $GITHUB_OUTPUT
+
+      - name: Prepare temp folder on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo mkdir -p /var/www/frontend_new
+            sudo rm -rf /var/www/frontend_new/*
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/frontend_new"
+          strip_components: 1
+
+      - name: Swap folder & set permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo mkdir -p /var/www/frontend
+            sudo mv /var/www/frontend /var/www/frontend_old
+            sudo mv /var/www/frontend_new /var/www/frontend
+            sudo rm -rf /var/www/frontend_old
+            sudo chown -R www-data:www-data /var/www/frontend
+
+  notify-server2:
+    needs: deploy-server2
+    if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'env_2.24.71.55')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set status
+        id: status
+        run: |
+          if [ "${{ needs.deploy-server2.result }}" == "success" ]; then
+            echo "text=✅ Thành công" >> $GITHUB_OUTPUT
+          else
+            echo "text=❌ Thất bại" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Telegram Notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ vars.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            *🚀 Thông báo Deploy - Sideline Frontend*
+
+            🌍 *Môi trường:* `env_2.24.71.55`
+            📊 *Trạng thái:* `${{ steps.status.outputs.text }}`
+            📝 *Commit:* `${{ needs.deploy-server2.outputs.commit_msg }}`
+            🆔 *SHA:* `${{ needs.deploy-server2.outputs.sha_short }}`
+            👤 *Deploy by:* `${{ github.actor }}`
+            👤 *Commit by:* `${{ needs.deploy-server2.outputs.author }}`
+
+            *Chi tiết:* [GitHub Action Log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
