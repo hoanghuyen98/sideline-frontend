@@ -1,36 +1,14 @@
-name: CI/CD Frontend
+name: CI Frontend
 
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - production
-          - env_2.24.71.55
-      branch:
-        description: 'Branch to deploy'
-        required: true
-        default: 'main'
-        type: string
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -47,79 +25,20 @@ jobs:
           VITE_DOMAIN_WEB: ${{ vars.VITE_DOMAIN_WEB }}
         run: npm run build
 
+      # ✅ Lưu thông tin commit vào artifact để deploy job đọc
+      - name: Save build info
+        run: |
+          echo '{
+            "sha": "${{ github.sha }}",
+            "sha_short": "'$(echo ${{ github.sha }} | cut -c1-7)'",
+            "commit_msg": "${{ github.event.head_commit.message }}",
+            "author": "${{ github.event.head_commit.author.name }}",
+            "run_id": "${{ github.run_id }}"
+          }' > dist/build-info.json
+
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
-          retention-days: 1
-
-  deploy-server1:
-    needs: build
-    if: |
-      github.event_name == 'workflow_dispatch' && (
-        github.event.inputs.environment == 'all' ||
-        github.event.inputs.environment == 'production'
-      )
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Download dist artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Deploy via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "dist/*"
-          target: "/var/www/frontend"
-          strip_components: 1
-
-      - name: Set permissions
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            sudo chown -R www-data:www-data /var/www/frontend
-
-  deploy-server2:
-    needs: build
-    if: |
-      github.event_name == 'workflow_dispatch' && (
-        github.event.inputs.environment == 'all' ||
-        github.event.inputs.environment == 'env_2.24.71.55'
-      )
-    runs-on: ubuntu-latest
-    environment: env_2.24.71.55
-    steps:
-      - name: Download dist artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Deploy via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "dist/*"
-          target: "/var/www/frontend"
-          strip_components: 1
-
-      - name: Set permissions
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            sudo chown -R www-data:www-data /var/www/frontend
+          retention-days: 7

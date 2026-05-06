@@ -1,0 +1,157 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - production
+          - env_2.24.71.55
+      run_id:
+        description: 'CI run ID để lấy artifact (để trống = lấy bản mới nhất)'
+        required: false
+        type: string
+
+jobs:
+  deploy-server1:
+    if: |
+      github.event.inputs.environment == 'all' ||
+      github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      sha_short: ${{ steps.info.outputs.sha_short }}
+      commit_msg: ${{ steps.info.outputs.commit_msg }}
+      author: ${{ steps.info.outputs.author }}
+    steps:
+      - name: Download dist artifact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          name: dist
+          path: dist/
+          run_id: ${{ github.event.inputs.run_id || '' }}
+          if_no_artifact_found: fail
+
+      # ✅ Đọc commit info từ artifact
+      - name: Read build info
+        id: info
+        run: |
+          cat dist/build-info.json
+          echo "sha_short=$(jq -r '.sha_short' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "commit_msg=$(jq -r '.commit_msg' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "author=$(jq -r '.author' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "built_run_id=$(jq -r '.run_id' dist/build-info.json)" >> $GITHUB_OUTPUT
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/frontend"
+          strip_components: 1
+
+      - name: Set permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: sudo chown -R www-data:www-data /var/www/frontend
+
+  notify-server1:
+    needs: deploy-server1
+    if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'production')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Telegram Notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ vars.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            *🚀 Thông báo Deploy - Sideline Frontend*
+
+            🌍 *Môi trường:* `production`
+            📊 *Trạng thái:* `${{ needs.deploy-server1.result == 'success' && '✅ Thành công' || '❌ Thất bại' }}`
+            📝 *Commit:* `${{ needs.deploy-server1.outputs.commit_msg }}`
+            🆔 *SHA:* `${{ needs.deploy-server1.outputs.sha_short }}`
+            👤 *Deploy by:* `${{ github.actor }}`
+            👤 *Commit by:* `${{ needs.deploy-server1.outputs.author }}`
+
+            *Chi tiết:* [GitHub Action Log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+  deploy-server2:
+    if: |
+      github.event.inputs.environment == 'all' ||
+      github.event.inputs.environment == 'env_2.24.71.55'
+    runs-on: ubuntu-latest
+    environment: env_2.24.71.55
+    outputs:
+      sha_short: ${{ steps.info.outputs.sha_short }}
+      commit_msg: ${{ steps.info.outputs.commit_msg }}
+      author: ${{ steps.info.outputs.author }}
+    steps:
+      - name: Download dist artifact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          name: dist
+          path: dist/
+          run_id: ${{ github.event.inputs.run_id || '' }}
+          if_no_artifact_found: fail
+
+      - name: Read build info
+        id: info
+        run: |
+          cat dist/build-info.json
+          echo "sha_short=$(jq -r '.sha_short' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "commit_msg=$(jq -r '.commit_msg' dist/build-info.json)" >> $GITHUB_OUTPUT
+          echo "author=$(jq -r '.author' dist/build-info.json)" >> $GITHUB_OUTPUT
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "dist/*"
+          target: "/var/www/frontend"
+          strip_components: 1
+
+      - name: Set permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: sudo chown -R www-data:www-data /var/www/frontend
+
+  notify-server2:
+    needs: deploy-server2
+    if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'env_2.24.71.55')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Telegram Notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ vars.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            *🚀 Thông báo Deploy - Sideline Frontend*
+
+            🌍 *Môi trường:* `env_2.24.71.55`
+            📊 *Trạng thái:* `${{ needs.deploy-server2.result == 'success' && '✅ Thành công' || '❌ Thất bại' }}`
+            📝 *Commit:* `${{ needs.deploy-server2.outputs.commit_msg }}`
+            🆔 *SHA:* `${{ needs.deploy-server2.outputs.sha_short }}`
+            👤 *Deploy by:* `${{ github.actor }}`
+            👤 *Commit by:* `${{ needs.deploy-server2.outputs.author }}`
+
+            *Chi tiết:* [GitHub Action Log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
