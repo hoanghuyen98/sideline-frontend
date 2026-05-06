@@ -13,12 +13,48 @@ on:
           - production
           - env_2.24.71.55
       run_id:
-        description: 'CI run ID để lấy artifact (để trống = lấy bản mới nhất)'
+        description: 'CI run ID (để trống = tự lấy bản build mới nhất)'
         required: false
         type: string
 
 jobs:
-  deploy-server1:
+  resolve-artifact:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.resolve.outputs.run_id }}
+    steps:
+      # ✅ Nếu không nhập run_id → tự tìm CI run mới nhất thành công
+      - name: Resolve run ID
+        id: resolve
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const inputRunId = '${{ github.event.inputs.run_id }}';
+            if (inputRunId) {
+              console.log(`Using provided run_id: ${inputRunId}`);
+              core.setOutput('run_id', inputRunId);
+              return;
+            }
+
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              status: 'success',
+              per_page: 1
+            });
+
+            if (runs.data.workflow_runs.length === 0) {
+              core.setFailed('Không tìm thấy CI run nào thành công!');
+              return;
+            }
+
+            const latestRunId = runs.data.workflow_runs[0].id;
+            console.log(`Auto-resolved run_id: ${latestRunId}`);
+            core.setOutput('run_id', latestRunId);
+
+  deploy-production:
+    needs: resolve-artifact
     if: |
       github.event.inputs.environment == 'all' ||
       github.event.inputs.environment == 'production'
@@ -30,14 +66,13 @@ jobs:
       author: ${{ steps.info.outputs.author }}
     steps:
       - name: Download dist artifact
-        uses: dawidd6/action-download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-          run_id: ${{ github.event.inputs.run_id || '' }}
-          if_no_artifact_found: fail
+          run-id: ${{ needs.resolve-artifact.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ Đọc commit info từ artifact
       - name: Read build info
         id: info
         run: |
@@ -45,7 +80,6 @@ jobs:
           echo "sha_short=$(jq -r '.sha_short' dist/build-info.json)" >> $GITHUB_OUTPUT
           echo "commit_msg=$(jq -r '.commit_msg' dist/build-info.json)" >> $GITHUB_OUTPUT
           echo "author=$(jq -r '.author' dist/build-info.json)" >> $GITHUB_OUTPUT
-          echo "built_run_id=$(jq -r '.run_id' dist/build-info.json)" >> $GITHUB_OUTPUT
 
       - name: Deploy via SCP
         uses: appleboy/scp-action@v0.1.7
@@ -65,8 +99,8 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: sudo chown -R www-data:www-data /var/www/frontend
 
-  notify-server1:
-    needs: deploy-server1
+  notify-production:
+    needs: deploy-production
     if: always() && (github.event.inputs.environment == 'all' || github.event.inputs.environment == 'production')
     runs-on: ubuntu-latest
     steps:
@@ -80,15 +114,16 @@ jobs:
             *🚀 Thông báo Deploy - Sideline Frontend*
 
             🌍 *Môi trường:* `production`
-            📊 *Trạng thái:* `${{ needs.deploy-server1.result == 'success' && '✅ Thành công' || '❌ Thất bại' }}`
-            📝 *Commit:* `${{ needs.deploy-server1.outputs.commit_msg }}`
-            🆔 *SHA:* `${{ needs.deploy-server1.outputs.sha_short }}`
+            📊 *Trạng thái:* `${{ needs.deploy-production.result == 'success' && '✅ Thành công' || '❌ Thất bại' }}`
+            📝 *Commit:* `${{ needs.deploy-production.outputs.commit_msg }}`
+            🆔 *SHA:* `${{ needs.deploy-production.outputs.sha_short }}`
             👤 *Deploy by:* `${{ github.actor }}`
-            👤 *Commit by:* `${{ needs.deploy-server1.outputs.author }}`
+            👤 *Commit by:* `${{ needs.deploy-production.outputs.author }}`
 
             *Chi tiết:* [GitHub Action Log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
   deploy-server2:
+    needs: resolve-artifact
     if: |
       github.event.inputs.environment == 'all' ||
       github.event.inputs.environment == 'env_2.24.71.55'
@@ -100,12 +135,12 @@ jobs:
       author: ${{ steps.info.outputs.author }}
     steps:
       - name: Download dist artifact
-        uses: dawidd6/action-download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-          run_id: ${{ github.event.inputs.run_id || '' }}
-          if_no_artifact_found: fail
+          run-id: ${{ needs.resolve-artifact.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Read build info
         id: info
