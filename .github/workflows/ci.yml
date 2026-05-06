@@ -2,7 +2,7 @@ name: CI/CD Frontend
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ["main"]  # Chỉ auto-deploy khi push vào main
   workflow_dispatch:
     inputs:
       environment:
@@ -14,6 +14,11 @@ on:
           - all
           - production
           - env_2.24.71.55
+      branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'main'
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,13 +29,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
+
       - name: Install deps
         run: npm install
+
       - name: Build
         env:
           VITE_BASE_URL: ${{ vars.VITE_BASE_URL }}
@@ -40,10 +50,11 @@ jobs:
   deploy-production:
     needs: build
     if: |
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' ||
-       github.event.inputs.environment == 'all' ||
-       github.event.inputs.environment == 'production')
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && (
+        github.event.inputs.environment == 'all' ||
+        github.event.inputs.environment == 'production'
+      ))
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -55,6 +66,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
+            DEPLOY_BRANCH="${{ github.event.inputs.branch || 'main' }}"
             PROJECT_DIR="/root/green_sideline/frontend"
             REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git"
 
@@ -64,25 +76,29 @@ jobs:
             fi
 
             cd $PROJECT_DIR
-            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git main
+            git fetch https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git
+            git checkout $DEPLOY_BRANCH
+            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git $DEPLOY_BRANCH
 
             if [ ! -d "$PROJECT_DIR/node_modules" ] || [ package.json -nt node_modules ]; then
               npm install
             fi
+
             VITE_BASE_URL=${{ vars.VITE_BASE_URL }} VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }} npm run build
 
             sudo mkdir -p /var/www/frontend
             sudo cp -r dist/* /var/www/frontend/
             sudo chown -R www-data:www-data /var/www/frontend
 
-  deploy-staging:
+  deploy-server2:
     needs: build
     if: |
-      github.ref == 'refs/heads/main' &&
-      (github.event.inputs.environment == 'all' ||
-       github.event.inputs.environment == 'staging')
+      github.event_name == 'workflow_dispatch' && (
+        github.event.inputs.environment == 'all' ||
+        github.event.inputs.environment == 'env_2.24.71.55'
+      )
     runs-on: ubuntu-latest
-    environment: staging
+    environment: env_2.24.71.55
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -92,6 +108,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
+            DEPLOY_BRANCH="${{ github.event.inputs.branch || 'main' }}"
             PROJECT_DIR="/root/green_sideline/frontend"
             REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git"
 
@@ -101,11 +118,14 @@ jobs:
             fi
 
             cd $PROJECT_DIR
-            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git main
+            git fetch https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git
+            git checkout $DEPLOY_BRANCH
+            git pull https://${{ secrets.GH_TOKEN }}@github.com/hoanghuyen98/sideline-frontend.git $DEPLOY_BRANCH
 
             if [ ! -d "$PROJECT_DIR/node_modules" ] || [ package.json -nt node_modules ]; then
               npm install
             fi
+
             VITE_BASE_URL=${{ vars.VITE_BASE_URL }} VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }} npm run build
 
             sudo mkdir -p /var/www/frontend
