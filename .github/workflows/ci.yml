@@ -25,7 +25,6 @@ jobs:
           VITE_DOMAIN_WEB: ${{ vars.VITE_DOMAIN_WEB }}
         run: npm run build
 
-      # ✅ Lưu thông tin commit vào artifact để deploy job đọc
       - name: Save build info
         run: |
           echo '{
