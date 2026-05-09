@@ -16,6 +16,7 @@ export const providerMail = {
   muaview: 'muaview',
   muaview_that: 'muaview_that',
   shopgmail: 'shopgmail',
+  gmail94: 'gmail94',
 }
 
 export const phoneStatusColor = {

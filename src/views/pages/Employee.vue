@@ -19,16 +19,23 @@
             <!-- Quản lí mail -->
             <div class="bg-white w-full max-w-5xl rounded-lg shadow-xl p-8 space-y-8">
                 <!-- Header -->
-                <div class="text-center space-y-2">
+                <div class="text-center space-y-4">
                     <h1 class="text-2xl font-bold text-gray-800 flex items-center justify-center gap-2">
                         📧 Quản lý Mail
                     </h1>
-                    <!-- Tabs -->
-                    <div class="flex flex-col md:flex-row md:flex-nowrap justify-center gap-3 md:gap-5">
-                        <label v-for="source in sources" :key="source.value"
-                            class="inline-flex items-center gap-2 cursor-pointer whitespace-nowrap text-sm md:text-base font-semibold">
-                            <input type="radio" :value="source.value" v-model="selectedSource"
-                                class="form-radio text-blue-600 scale-110 md:scale-125 focus:ring-blue-500" />
+                    <!-- Tabs: pill chips -->
+                    <div class="flex flex-wrap justify-center gap-2">
+                        <label
+                            v-for="source in sources"
+                            :key="source.value"
+                            :class="[
+                                'inline-flex items-center px-4 py-1.5 rounded-full border text-sm font-semibold cursor-pointer select-none transition-all duration-150',
+                                selectedSource === source.value
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow'
+                                    : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                            ]"
+                        >
+                            <input type="radio" :value="source.value" v-model="selectedSource" class="sr-only" />
                             {{ source.label }}
                         </label>
                     </div>
@@ -319,7 +326,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import apiServices from '@/services/api.services'
 import { useToast } from "vue-toastification"
 import ButtonProcess from '@/components/ButtonProcess.vue'
@@ -356,6 +363,7 @@ const sellmmoMail = ref([])
 const muaviewMail = ref([])
 const muaviewMailThat = ref([])
 const shopGmail = ref([])
+const gmail94Mail = ref([])
 const selectedSource = ref('dongvan')
 const selectedMailType = ref('')
 const quantity = ref(1)
@@ -369,6 +377,7 @@ const sources = [
     { label: 'Mua từ ShopGmail', value: 'shopgmail' },
     { label: 'Gmail Ảo (MuaView)', value: 'muaview' },
     { label: 'Gmail Thật (MuaView)', value: 'muaview_that' },
+    { label: 'Mua từ Gmail94', value: 'gmail94' },
 ]
 
 const showListMail = async () => {
@@ -416,7 +425,7 @@ const buyMail = async () => {
             muaview: 'muaview',
             muaview_that: 'muaview_that',
             shopgmail: 'shopgmail',
-
+            gmail94: 'gmail94',
         };
         const provider = providerMap[selectedSource.value];
 
@@ -477,9 +486,14 @@ const mailTypes = computed(() => {
         return muaviewMailThat.value
     } else if (selectedSource.value === 'shopgmail') {
         return shopGmail.value
+    } else if (selectedSource.value === 'gmail94') {
+        return gmail94Mail.value
     }
-    
     return []
+})
+
+watch(selectedSource, () => {
+    selectedMailType.value = ''
 })
 
 const copyMail = async (mail) => {
@@ -872,7 +886,7 @@ onMounted(async () => {
     username.value = TokenService.getCookieByKey("user_name") || "Unknown"
 
     try {
-        const [listMail, summary, appleMailRes, dongvanRes, sellmmoRes, muaviewRes, muaviewthatRes, shopgmailRes] = await Promise.all([
+        const [listMail, summary, appleMailRes, dongvanRes, sellmmoRes, muaviewRes, muaviewthatRes, shopgmailRes, gmail94Res] = await Promise.all([
             showListMail(),
             fetchSummary(),
             apiServices.getAppleMail(),
@@ -880,7 +894,8 @@ onMounted(async () => {
             apiServices.getMailCatagories(providerMail.sellmmo),
             apiServices.getMailCatagories(providerMail.muaview),
             apiServices.getMailCatagories(providerMail.muaview_that),
-            apiServices.getMailCatagories(providerMail.shopgmail)
+            apiServices.getMailCatagories(providerMail.shopgmail),
+            apiServices.getMailCatagories(providerMail.gmail94),
         ])
         // Backend trả categories là array trực tiếp hoặc object có .data bên trong
         const parseCategories = (res) => {
@@ -918,6 +933,12 @@ onMounted(async () => {
             shopGmail.value = parseCategories(shopgmailRes)
         } else {
             toast.warning("Không có dữ liệu từ ShopGmail!", { timeout: 3000, position: "top-center" })
+        }
+
+        if (gmail94Res?.status === 'success') {
+            gmail94Mail.value = parseCategories(gmail94Res)
+        } else {
+            toast.warning("Không có dữ liệu từ Gmail94!", { timeout: 3000, position: "top-center" })
         }
 
         if (appleMailRes?.status === 'success') {
