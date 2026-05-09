@@ -86,9 +86,20 @@
                 <div v-for="(mail, index) in emails" :key="index"
                     class="flex flex-col md:flex-row justify-between items-center border px-3 py-2 rounded-md mb-2 text-sm shadow-sm"
                     :class="mail.isUsed ? 'bg-gray-100 text-gray-400 line-through opacity-60 pointer-events-none' : 'bg-white'">
-                    <div class="flex flex-col md:flex-row gap-2">
+                    <div class="flex flex-col md:flex-row gap-2 items-center">
                         <span :class="mail.isUsed ? 'text-gray-400' : 'font-bold text-purple-700'">
                             {{ index + 1 }}.
+                        </span>
+                        <span class="text-xs px-1.5 py-0.5 rounded font-semibold"
+                            :class="{
+                                'bg-yellow-100 text-yellow-700': mail.provider === 'gmail94',
+                                'bg-blue-100 text-blue-700': mail.provider === 'shopgmail',
+                                'bg-green-100 text-green-700': mail.provider === 'sellmmo',
+                                'bg-purple-100 text-purple-700': mail.provider === 'dongvan',
+                                'bg-orange-100 text-orange-700': mail.provider === 'muaview' || mail.provider === 'muaview_that',
+                                'bg-gray-100 text-gray-600': !['gmail94','shopgmail','sellmmo','dongvan','muaview','muaview_that'].includes(mail.provider),
+                            }">
+                            {{ mail.provider }}
                         </span>
                         <span>{{ mail.email }} |</span>
                         <span class="font-mono">{{ mail.pass }}</span>
