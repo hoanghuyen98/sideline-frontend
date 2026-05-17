@@ -4,7 +4,7 @@ import TokenService from './token.service'
 axios.defaults.xsrfCookieName = 'techhub_csrftoken'
 axios.defaults.xsrfHeaderName = 'X-CSRFToken'
 axios.defaults.withCredentials = true
-let root_url = import.meta.env.VITE_BASE_URL || 'http://38.145.199.150'
+let root_url = import.meta.env.VITE_BASE_URL
 
 const instance = axios.create({
   baseURL: root_url,
