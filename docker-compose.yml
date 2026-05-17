@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: .
+    image: sideline-frontend-local:latest
+    container_name: sideline_frontend
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      # BẮT ĐÚNG DOMAIN GỐC CHO FRONTEND VUE
+      - "traefik.http.routers.sideline_frontend_router.rule=Host(`sideliine.com`) || Host(`www.sideliine.com`)"
+      - "traefik.http.routers.sideline_frontend_router.entrypoints=websecure"
+      - "traefik.http.routers.sideline_frontend_router.tls=true"
+      - "traefik.http.routers.sideline_frontend_router.tls.certresolver=myresolver"
+      - "traefik.http.services.sideline_frontend_service.loadbalancer.server.port=80"
+    networks:
+      - webproxy
+
+networks:
+  webproxy:
+    external: true
