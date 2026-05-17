@@ -34,54 +34,57 @@ jobs:
           echo "commit_msg=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
           echo "author=$(git log -1 --pretty=format:'%an')" >> $GITHUB_OUTPUT
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install deps
-        run: npm install
-
-      # ✅ Build với đúng vars của environment production
-      - name: Build
-        env:
-          VITE_BASE_URL: ${{ vars.VITE_BASE_URL }}
-          VITE_DOMAIN_WEB: ${{ vars.VITE_DOMAIN_WEB }}
-        run: npm run build
-
-      - name: Prepare temp folder on server
+      - name: Deploy to VPS via Docker Compose
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.SSH_HOST }}
           username: ${{ vars.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            sudo mkdir -p /var/www/frontend_new
-            sudo rm -rf /var/www/frontend_new/*
-
-      - name: Deploy via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "dist/*"
-          target: "/var/www/frontend_new"
-          strip_components: 1
-
-      - name: Swap folder & set permissions
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            sudo mkdir -p /var/www/frontend
-            sudo mv /var/www/frontend /var/www/frontend_old
-            sudo mv /var/www/frontend_new /var/www/frontend
-            sudo rm -rf /var/www/frontend_old
-            sudo chown -R www-data:www-data /var/www/frontend
+            set -e
+            
+            PROJECT_DIR="/root/sideline/sideline-frontend"
+            REPO_URL="https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git"
+            
+            # 1. Kiểm tra và tự động clone repository nếu chưa tồn tại trên VPS
+            if [ ! -d "$PROJECT_DIR" ]; then
+              echo "Directory does not exist. Cloning repository..."
+              git clone $REPO_URL $PROJECT_DIR
+            fi
+            
+            cd $PROJECT_DIR
+            
+            # 2. Tạo hoặc ghi đè file cấu hình build .env cho Vue dựa vào biến trên GitHub
+            echo "Generating frontend build environment variables..."
+            echo "VITE_API_BASE_URL=${{ vars.VITE_BASE_URL }}" > .env.production
+            echo "VITE_DOMAIN_WEB=${{ vars.VITE_DOMAIN_WEB }}" >> .env.production
+            
+            # 3. Đồng bộ hóa mã nguồn mới nhất từ Git
+            echo "Syncing latest source code..."
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # 4. Hạ container cũ một cách an toàn để tránh kẹt cổng mạng Traefik
+            echo "Stopping old frontend container..."
+            docker compose down || true
+            
+            # 5. Ép Docker kích hoạt BuildKit và build lại Image mới hoàn toàn
+            echo "Building and launching container with BuildKit..."
+            DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose up -d --build --force-recreate
+            
+            # 6. Kiểm tra xem container Nginx có sống sót sau khi khởi động không
+            echo "Verifying deployment health..."
+            sleep 3
+            if [ -z "$(docker ps -q -f name=sideline_frontend)" ]; then
+              echo "❌ ERROR: sideline_frontend failed to start! Fetching logs..."
+              docker logs sideline_frontend
+              exit 1
+            fi
+            
+            # 7. Dọn dẹp layer cache rác để tránh đầy bộ nhớ đệm của ổ cứng VPS
+            echo "Cleaning dangling docker images..."
+            docker network prune --force || true
+            docker image prune -f
 
   notify-production:
     needs: deploy-production
